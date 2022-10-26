@@ -1,0 +1,99 @@
+//package com.sunac;
+//
+//import com.baozi.domain.EsChargeIncomingFee;
+//import com.baozi.utils.JdbcUtil;
+//import com.sunac.utils.Util;
+//import org.apache.flink.api.common.functions.MapFunction;
+//import org.apache.flink.api.common.functions.RuntimeContext;
+//import org.apache.flink.api.common.state.MapState;
+//import org.apache.flink.api.common.state.MapStateDescriptor;
+//import org.apache.flink.api.java.operators.MapOperator;
+//import org.apache.flink.configuration.Configuration;
+//import org.apache.flink.state.api.BootstrapTransformation;
+//import org.apache.flink.state.api.OperatorTransformation;
+//import org.apache.flink.state.api.functions.KeyedStateBootstrapFunction;
+//import org.apache.flink.types.Row;
+//import com.sunac.domain.EsChargeIncomingFee;
+//import com.sunac.domain.SqlConfig;
+//import org.apache.flink.api.common.typeinfo.BasicTypeInfo;
+//import org.apache.flink.api.java.ExecutionEnvironment;
+//import org.apache.flink.api.java.typeutils.RowTypeInfo;
+//import org.apache.flink.connector.jdbc.JdbcInputFormat;
+//import org.apache.flink.connector.jdbc.split.JdbcGenericParameterValuesProvider;
+//
+//import java.sql.Connection;
+//import java.sql.SQLException;
+//import java.sql.Statement;
+//
+///**
+// * @author: create by Lantian
+// * @version: v1.0
+// * @description: com.sunac.utils
+// * @date:2022/9/6
+// */
+//public class es_charge_incoming_fee {
+//    public static void main(String[] args) throws Exception {
+////        (
+////        实收费总表:14872689
+////                select
+////        fld_area_guid as areaId,
+////                min(fld_operate_date) as firstTime
+////        from
+////                ods_fd_es_charge_incoming_fee_af
+////        where
+////        fld_cancel != 1
+////        and fld_create_user != 'importuser' --创建人
+////        and fld_create_user != 'outuser'
+////        GROUP BY fld_area_guid
+////        ) f1 on f1.areaId=d.fld_area_guid  --项目ID
+//
+////        94	f1.firstTime	datetime	聚合每个围合对应收费时间的最小值	否
+//
+//
+//        // 混合环境创建
+//
+//
+//        Connection conn = JdbcUtil.getConnection();
+//        Statement statement = conn.createStatement();
+//        String s = "select fld_area_guid from maindb.es_charge_incoming_fee where " + "fld_cancel != 1 and fld_create_user != 'importuser' and fld_create_user != 'outuser' " + "group by fld_area_guid ";
+//        JdbcGenericParameterValuesProvider paramProviderIncoming = Util.getParameters(statement, s, "fld_area_guid");
+//        JdbcUtil.close(conn, statement);
+//
+//        ExecutionEnvironment env = ExecutionEnvironment.getExecutionEnvironment();
+//        env.setParallelism(8);
+//
+//        MapOperator<Row, EsChargeIncomingFee> esChargeIncomingDataBillData = env.createInput(JdbcInputFormat.buildJdbcInputFormat().setParametersProvider(paramProviderIncoming).setDrivername("com.mysql.cj.jdbc.Driver").setDBUrl("jdbc:mysql://172.17.44.84:4000/maindb").setUsername("report_readonly_user").setPassword("TIDB_report_user").setQuery(SqlConfig.ES_CHARGE_INCOMING_FEE).setRowTypeInfo(new RowTypeInfo(BasicTypeInfo.STRING_TYPE_INFO, BasicTypeInfo.STRING_TYPE_INFO, BasicTypeInfo.STRING_TYPE_INFO)).setFetchSize(1000).finish()).map(new MapFunction<Row, EsChargeIncomingFee>() {
+//            @Override
+//            public EsChargeIncomingFee map(Row row) throws Exception {
+//                return new EsChargeIncomingFee(row.getFieldAs(0), row.getFieldAs(1), row.getFieldAs(2));
+//            }
+//        });
+//
+//        BootstrapTransformation<EsChargeIncomingFee> transformation = OperatorTransformation.bootstrapWith(esChargeIncomingDataBillData).keyBy(k -> k.getFld_area_guid()).transform(new KeyedStateBootstrapFunction<String, EsChargeIncomingFee>() {
+//            MapState<String, EsChargeIncomingFee> mapState;
+//
+//            @Override
+//            public void open(Configuration parameters) throws Exception {
+//                RuntimeContext runtimeContext = getRuntimeContext();
+//                mapState = runtimeContext.getMapState(new MapStateDescriptor<String, EsChargeIncomingFee>("map_stat", String.class, EsChargeIncomingFee.class));
+//            }
+//
+//            @Override
+//            public void processElement(EsChargeIncomingFee newData, KeyedStateBootstrapFunction.Context context) throws Exception {
+//                //fld_area_guid
+//                EsChargeIncomingFee oldData = mapState.get(newData.getFld_area_guid());
+//                if (null == oldData) {
+//                    mapState.put(newData.getFld_area_guid(), newData);
+//                }else{
+//                    // 新的比旧的符合条件，更新
+//                     if (newData.compareTo(oldData) < 0){
+//                         mapState.put(newData.getFld_area_guid(), newData);
+//                     }
+//                }
+//
+//            }
+//        });
+//
+//        esChargeIncomingDataBillData.print();
+//    }
+//}

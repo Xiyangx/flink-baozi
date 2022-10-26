@@ -1,0 +1,120 @@
+// 5,es_charge_project	计费科目表:测流 p ON p.fld_guid = d.fld_project_guid:6f1a4cec-210d-11ec-a455-a4bb6d58a26d
+
+//        fld_guid		es_charge_project	ON p.fld_guid = d.fld_project_guid
+//        fld_name AS fld_project_name,		es_charge_project
+//        fld_object_type ,		es_charge_project
+
+        // 6,es_charge_pay_mode	付款方式/预付款类型:测流 m ON m.fld_guid = d.fld_pay_mode_guid:147aa15c-2fb0-11ec-a455-a4bb6d58a26d
+/*        fld_guid		es_charge_pay_mode	ON m.fld_guid = d.fld_pay_mode_guid
+          fld_name AS fld_pay_mode_name,		es_charge_pay_mode
+          fld_resource,		es_charge_pay_mode
+          fld_pre_pay,		es_charge_pay_mode*/
+
+
+// 8,es_info_object_park	车位资料 op.fld_guid = d.fld_object_guid AND op.fld_area_guid = d.fld_area_guid
+          //                fld_guid
+          //                fld_area_guid
+          //                fld_cw_category,
+
+        // 9,es_info_object_class	资源业态:oc ON oc.fld_guid = o.fld_class_guid
+        //                fld_guid,
+        //                fld_name fld_object_class_name,
+
+
+
+
+                // 10,ods_fd_es_info_object_and_owner_af:人房关系表 ao
+                // -- 该语句可能重复，需要去重（
+                // 分组：fld_area_guid、fld_object_guid、fld_owner_guid
+                // 排序：fld_is_current desc,.fld_is_charge desc,fld_status desc）
+
+                //       ao.fld_area_guid = d.fld_area_guid
+                // * AND ao.fld_object_guid = d.fld_object_guid
+                // * AND ao.fld_owner_guid = d.fld_owner_guid
+
+
+
+
+        // 11,) db ON:es_charge_incoming_data_bill  实收明细使用票据记录   es_charge_bill:票据号使用记录表(测流) es_charge_bill_type	票据类型设置表 (测流)
+//        JOIN (
+//                -- 取收据：该语句可能重复，需要去重（分组：fld_data_src_guid 排序：b.fld_operate_date desc）
+//                SELECT
+//                data_bill.fld_data_src_guid,
+//                b.fld_status,
+//                b.fld_bill_code,
+//                t.fld_name,
+//                t.fld_guid
+//                FROM
+//                ods_fd_es_charge_incoming_data_bill_af data_bill
+//                JOIN ods_fd_es_charge_bill_af b ON data_bill.fld_bill_guid = b.fld_guid
+//                JOIN ods_fd_es_charge_bill_type_af t ON t.fld_guid = b.fld_type_guid and t.fld_category=0
+//        ) db ON db.fld_data_src_guid = d.fld_guid
+
+        // 12,es_charge_settle_accounts_detail	地产结算明细表  --- 测流
+
+        ////        ON ( ad.fld_owner_fee_guid = d.fld_owner_fee_guid
+        ////          OR ad.fld_adjust_guid    = d.fld_owner_fee_guid
+        ////        AND ad.fld_area_guid = d.fld_area_guid
+        ////        AND ad.fld_status = 1
+fld_create_date desc
+
+//        // 13,es_charge_settle_accounts_main	地产结算主表 --- 测流
+
+        //        JOIN ods_fd_es_charge_settle_accounts_main_af am ON
+        //            am.fld_guid =     ad.fld_main_guid
+        //        AND am.fld_area_guid = d.fld_area_guid
+
+
+        //        AND am.fld_examine_status = 4
+
+
+//        // 15,es_charge_project_period	科目归类表 --- 测流
+//        // fld_guid
+//        // fld_type
+//        // fld_name as fld_project_period_name,
+//
+        // 17,es_charge_hand_in_record	实收交款申请表 --- 测流:JOIN es_charge_hand_in_record hir on hir.fld_guid=two.fld_hand_in_guid
+
+fld_hand_in,
+fld_start_date as fld_hand_in_start_date,
+fld_end_date as fld_hand_in_end_date,
+
+//        // 18,es_charge_voucher_check_service_set	凭证-辅助核算配置-物业服务类型  -- 测流:
+ss.fld_project_class_guid=d.fld_project_guid
+ss.fld_project_class_guid=d.fld_project_guid
+
+
+//        // 19.es_charge_voucher_project_pay:凭证-核算科目配置-付款方式:vpp	fld_pay_mode_guid as voucher_fld_pay_mode_guid		es_charge_voucher_project_pay	on vpp.fld_pay_mode_guid=d.fld_pay_mode_guid
+
+
+
+      --8月18日新增
+    LEFT JOIN
+        (
+            select
+                fld_area_guid as areaId,
+                min(fld_operate_date) as firstTime
+            from
+                ods_fd_es_charge_incoming_fee_af
+	        where
+                fld_cancel != 1
+                and fld_create_user != 'importuser'
+                and fld_create_user != 'outuser'
+	        GROUP BY fld_area_guid
+        ) f1 on f1.areaId=d.fld_area_guid
+
+f1	fld_area_guid as areaId,		es_charge_incoming_fee	ON f1.areaId=d.fld_area_guid
+f1	fld_cancel		es_charge_incoming_fee	fld_cancel != 1
+f1	min(fld_operate_date) as firstTime 		es_charge_incoming_fee
+f1	fld_create_user		es_charge_incoming_fee	"fld_create_user != 'importuser'
+fld_create_user != 'outuser' "
+
+
+
+fld_guid as fld_back_guid,		es_charge_incoming_back
+fld_incoming_back_guid as back_convert_kou_guid		es_charge_incoming_back	on ib.back_convert_kou_guid=d.fld_incoming_fee_guid
+fld_incoming_convert_guid as back_convert_kou_guid		es_charge_incoming_back	on ib.back_convert_kou_guid=d.fld_incoming_fee_guid
+fld_incoming_kou_guid as back_convert_kou_guid		es_charge_incoming_back	on ib.back_convert_kou_guid=d.fld_incoming_fee_guid
+fld_submit_time		es_charge_incoming_back
+
+
