@@ -86,7 +86,6 @@ public class AllDataRichSinkFunction extends RichSinkFunction<AllData> {
         return integer;
     }
     public static void insertSql(PreparedStatement ps, AllData value) throws SQLException {
-        System.out.println("value = " + value);
         ps.setString(1,getStringValue(value.getFld_guid()));
         ps.setString(2,value.getFld_create_user());
         ps.setString(3,value.getFld_create_date());

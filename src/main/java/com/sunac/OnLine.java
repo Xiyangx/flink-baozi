@@ -56,9 +56,6 @@ public class OnLine {
                 .process(new EsInfoObjectCoProcessFunction());
         join02.getSideOutput(SIDE_STREAM_TAG).addSink(new MySqlCommitSink());
 
-        esInfoObject.print("esInfoObject");
-        join02.print("join02");
-
         //esInfoObjectClass
         SingleOutputStreamOperator<EsInfoObjectClass> esInfoObjectClass = mySideTable2.getSideOutput(ES_INFO_OBJECT_CLASS_TAG)
                 .map(new CommonMapFunction<EsInfoObjectClass>(Config.EsInfoObjectClass))
@@ -174,9 +171,6 @@ public class OnLine {
         esChargeSettleAccountsDetailOne.print("esChargeSettleAccountsDetail");
         join11.getSideOutput(SIDE_STREAM_TAG).addSink(new MySqlCommitSink());
 
-        join11.print("join11");
-
-
         //esChargeSettleAccountsMain
         SingleOutputStreamOperator<EsChargeSettleAccountsMain> esChargeSettleAccountsMain = mySideTable2.getSideOutput(ES_CHARGE_SETTLE_ACCOUNTS_MAIN_TAG)
                 .map(new CommonMapFunction<EsChargeSettleAccountsMain>(Config.EsChargeSettleAccountsMain))
@@ -187,8 +181,6 @@ public class OnLine {
                 .keyBy(t -> DigestUtils.md5Hex(t.getAd_fld_main_guid() + t.getFld_area_guid()), t1 -> t1.getPk())
                 .process(new EsChargeSettleAccountsMainCoMapFunction());
         join12.getSideOutput(SIDE_STREAM_TAG).addSink(new MySqlCommitSink());
-        join12.print("join12");
-
 
         //esChargeIncomingFee
         SingleOutputStreamOperator<EsChargeIncomingFee> esChargeIncomingFee = Util.getKafkaSource(env, Topic.ES_CHARGE_INCOMING_FEE)
@@ -247,11 +239,9 @@ public class OnLine {
                 .map(new CommonMapFunction<EsInfoParamInfo>(Config.EsInfoParamInfo))
                 .returns(EsInfoParamInfo.class)
                 .filter(t -> StringUtils.isNotBlank(t.getFld_guid()));
-        esInfoParamInfo.print("esInfoParamInfo");
         SingleOutputStreamOperator<AllData> join18 = join17.connect(esInfoParamInfo)
                 .keyBy(t -> t.getFld_reason_guid(), t1 -> t1.getFld_guid())
                 .process(new EsInfoParamInfoCoProcessFunction());
-        join18.print("join18");
         join18.getSideOutput(SIDE_STREAM_TAG).addSink(new MySqlCommitSink());
         join18.addSink(new AllDataRichSinkFunction());
         env.execute();
