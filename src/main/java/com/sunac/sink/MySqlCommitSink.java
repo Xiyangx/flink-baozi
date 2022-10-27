@@ -1,5 +1,6 @@
-package com.sunac.utils;
+package com.sunac.sink;
 
+import com.sunac.utils.JdbcUtils;
 import org.apache.flink.api.common.ExecutionConfig;
 import org.apache.flink.api.common.typeutils.base.VoidSerializer;
 import org.apache.flink.api.java.tuple.Tuple2;

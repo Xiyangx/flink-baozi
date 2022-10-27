@@ -2,9 +2,9 @@ package com.sunac;
 
 import com.sunac.entity.*;
 import com.sunac.map.*;
-import com.sunac.utils.AllDataRichSinkFunction;
+import com.sunac.sink.AllDataRichSinkFunction;
 import com.sunac.utils.JdbcUtils;
-import com.sunac.utils.MySqlCommitSink;
+import com.sunac.sink.MySqlCommitSink;
 import com.sunac.utils.Util;
 import org.apache.commons.codec.digest.DigestUtils;
 import org.apache.commons.lang.StringUtils;

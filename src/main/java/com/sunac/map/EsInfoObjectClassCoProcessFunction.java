@@ -53,9 +53,9 @@ public class EsInfoObjectClassCoProcessFunction extends KeyedCoProcessFunction<S
         }
 
         String operation_type = allData.getOperation_type();
-        String o_fld_guid = allData.getO_fld_class_guid();
-        if (null != o_fld_guid && !"".equals(o_fld_guid)) {
-            keyMapState.put(o_fld_guid, null);
+        String fld_guid = allData.getFld_guid();
+        if (null != fld_guid && !"".equals(fld_guid)) {
+            keyMapState.put(fld_guid, null);
         }
         if (operation_type.equals(Config.PASS)) {
             collector.collect(allData);

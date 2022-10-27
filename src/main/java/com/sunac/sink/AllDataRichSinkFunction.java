@@ -1,8 +1,9 @@
-package com.sunac.utils;
+package com.sunac.sink;
 
 import com.sunac.Config;
 import com.sunac.domain.CommonDomain;
 import com.sunac.entity.AllData;
+import com.sunac.utils.JdbcUtils;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.functions.sink.RichSinkFunction;
