@@ -22,7 +22,7 @@ import static com.sunac.Constant.*;
  * @Date 2022/10/2 10:19 上午
  * @Version 1.0
  */
-public class TestOnLine1 {
+public class OnLine {
     public static void main(String[] args) throws Exception {
         Configuration configuration = new Configuration();
         configuration.setInteger("rest.port", 8822);
