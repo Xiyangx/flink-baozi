@@ -371,7 +371,7 @@ public class OnLine {
         DataStream s17 = c17.getSideOutput(Constant.SIDE_STREAM_TAG);
         DataStream s18 = c18.getSideOutput(Constant.SIDE_STREAM_TAG);
         DataStream resultStream = s1.union(s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18);
-        resultStream.rebalance().addSink(new AllDataRichSinkFunctionPlus("small-table-sink")).setParallelism(parallelismRun).name("small-table-sink");
+        resultStream.rebalance().addSink(new AllDataRichSinkFunctionPlus("small-table-sink")).setParallelism(parallelismRun/2).name("small-table-sink");
 
         c18.addSink(new AllDataRichSinkFunction()).setParallelism(3).name("one-sink-insertAndUpdate");
         env.execute("owner");
