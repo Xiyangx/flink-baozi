@@ -1,17 +1,9 @@
 package com.sunac.utils;
 
+import com.sunac.ow.owdomain.AllData;
 
-import com.sunac.Config;
-import com.sunac.domain.AllData;
-import scala.annotation.meta.param;
-
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.SQLException;
-import java.util.ArrayList;
-import java.util.List;
-
-import static org.apache.flink.util.IOUtils.closeAll;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 
 /**
  * @author: create by Lantian
@@ -21,8 +13,26 @@ import static org.apache.flink.util.IOUtils.closeAll;
  */
 public class Test {
     public static void main(String[] args) throws Exception {
-        System.out.println(String.valueOf(null));
+        AllData value = new AllData();
+        value.setEcrr_fld_general_tax(new BigDecimal("-1.00"));
+        value.setFld_amount(new BigDecimal("0"));
+        BigDecimal tmp = value.getEcrr_fld_general_tax();
+
+        if (tmp.compareTo(new BigDecimal("-1.00"))==0){
+            tmp = new BigDecimal("-1");
+        }
+        if (value.getEcrr_fld_general_tax() == null) {
+            tmp = BigDecimal.valueOf(-1);
+        }
+        if (tmp.equals(BigDecimal.valueOf(-1)) || tmp.equals(BigDecimal.valueOf(-2))) {
+            tmp = BigDecimal.valueOf(0);
+        }
 
 
+
+
+        BigDecimal bigDecimal = new BigDecimal("-1.00");
+        BigDecimal subtract = bigDecimal.subtract(new BigDecimal("-1"));
+        System.out.println("multiply = " + subtract);
     }
 }

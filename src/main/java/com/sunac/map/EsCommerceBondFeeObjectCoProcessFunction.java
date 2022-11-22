@@ -1,12 +1,11 @@
 package com.sunac.map;
 
 import com.sunac.Config;
-import com.sunac.domain.CommonDomain;
-import com.sunac.entity.AllData;
-import com.sunac.entity.EsChargeProjectPeriod;
-import com.sunac.entity.EsCommerceBondFeeObject;
+import com.sunac.ow.owdomain.AllData;
+import com.sunac.ow.owdomain.EsCommerceBondFeeObject;
+import com.sunac.utils.HikariUtil;
 import com.sunac.utils.JdbcUtils;
-import com.sunac.utils.Util;
+import org.apache.commons.lang.StringUtils;
 import org.apache.flink.api.common.functions.RuntimeContext;
 import org.apache.flink.api.common.state.MapState;
 import org.apache.flink.api.common.state.MapStateDescriptor;
@@ -14,8 +13,11 @@ import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.functions.co.KeyedCoProcessFunction;
 import org.apache.flink.util.Collector;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import java.util.Iterator;
+import java.sql.Connection;
+import java.util.HashMap;
 
 /**
  * @Description: TODO
@@ -26,67 +28,132 @@ import java.util.Iterator;
 public class EsCommerceBondFeeObjectCoProcessFunction extends KeyedCoProcessFunction<String, AllData, EsCommerceBondFeeObject, AllData> {
 
     MapState<String, EsCommerceBondFeeObject> mapState;
-    MapState<String, Void> keyMapState;
+    private static final Logger log = LoggerFactory.getLogger(EsCommerceBondFeeObjectCoProcessFunction.class);
+    transient Connection connection = null;
 
     @Override
     public void open(Configuration parameters) throws Exception {
         RuntimeContext runtimeContext = getRuntimeContext();
-        mapState = runtimeContext.getMapState(new MapStateDescriptor<String, EsCommerceBondFeeObject>("map_stat", String.class, EsCommerceBondFeeObject.class));
-        keyMapState = runtimeContext.getMapState(new MapStateDescriptor<String, Void>("map_stat_2", String.class, Void.class));
+        mapState = runtimeContext.getMapState(new MapStateDescriptor<>("map_stat", String.class, EsCommerceBondFeeObject.class));
+        connection = HikariUtil.getInstance().getConnection();
+        log.info("=====================" + this.getClass() + ":创建HikariUtil成功！！！=======================");
     }
 
     @Override
     public void processElement1(AllData allData, KeyedCoProcessFunction<String, AllData, EsCommerceBondFeeObject, AllData>.Context context, Collector<AllData> collector) throws Exception {
         // TODO PASS事件 ：把主表主键维护
-        String operation_type = allData.getOperation_type();
-        String fld_guid = allData.getFld_guid();
-        if (null != fld_guid && !"".equals(fld_guid)) {
-            keyMapState.put(fld_guid, null);
+        String operationType = allData.getOperation_type();
+        String fldGuid = allData.getFld_guid();
+        if (StringUtils.isNotBlank(fldGuid)) {
+            Tuple2<Connection, Boolean> tp = JdbcUtils.insertOrIgnore2(connection,"idx_owe_es_commerce_bond_fee_object", fldGuid, allData.getFld_object_guid());
+            connection = tp.f0;
+            log.info("=====================" + this.getClass() + ":插入fld_guid成功！！！=======================");
         }
-        if (operation_type.equals(Config.PASS)) {
-            collector.collect(allData);
+        if (operationType.equals(Config.PASS)) {
+            return;
         }
-        if (operation_type.equals(Config.INSERT) || operation_type.equals(Config.UPDATE)) {
+        if (operationType.equals(Config.INSERT) || operationType.equals(Config.UPDATE)) {
             EsCommerceBondFeeObject esCommerceBondFeeObject = mapState.get(allData.getFld_object_guid());
             if (null != esCommerceBondFeeObject) {
                 allData.setCbfo_fld_object_guid(esCommerceBondFeeObject.getFld_object_guid());
                 allData.setCbfo_fld_bond_guid(esCommerceBondFeeObject.getFld_bond_guid());
-            } else {
+            }else {
                 allData.setCbfo_fld_bond_guid(Config.SINGLE_PARTITION);
             }
             collector.collect(allData);
         }
-
     }
 
     @Override
     public void processElement2(EsCommerceBondFeeObject newData, KeyedCoProcessFunction<String, AllData, EsCommerceBondFeeObject, AllData>.Context context, Collector<AllData> collector) throws Exception {
-        String operation_type = newData.getOperation_type();
+        String operationType = newData.getOperation_type();
 
-        if (operation_type.equals(Config.PASS) || (operation_type.equals(Config.UPDATE) && newData.getUpdateInfoMap().size() == 0)) {
+        if (operationType.equals(Config.PASS)) {
             return;
         }
-
-
-        String fld_object_guid = newData.getFld_object_guid();
-        Iterator<String> iterator = keyMapState.keys().iterator();
-        boolean isHaveKey = iterator.hasNext();
-        boolean isSend = false;
-        if (operation_type.equals(Config.DELETE)) {
-            mapState.remove(fld_object_guid);
-            isSend = true;
-        } else if (operation_type.equals(Config.INSERT) || operation_type.equals(Config.UPDATE)) {
-            mapState.put(fld_object_guid, newData);
-            isSend = true;
+        if (operationType.equals(Config.UPDATE) && newData.getUpdateInfoMap().size() == 0) {
+            return;
         }
-        if (isSend && isHaveKey) {
-            String sql = JdbcUtils.makeSQL(new Tuple2<String, CommonDomain>(Config.EsCommerceBondFeeObject, newData));
-            if (null != sql) {
-                while (iterator.hasNext()) {
-                    String fld_guid_op = iterator.next();
-                    Util.sendData2SlideStream(context, sql, fld_guid_op);
-                }
+        String fldObjectGuid = newData.getFld_object_guid();
+        if (operationType.equals(Config.DELETE)) {
+            mapState.remove(fldObjectGuid);
+        }
+        if (operationType.equals(Config.INSERT)) {
+            mapState.put(fldObjectGuid, newData);
+            AllData allData = new AllData();
+            allData.setOperation_type("EsCommerceBondFeeObject" + "#" + operationType);
+            allData.setCbfo_fld_bond_guid(newData.getFld_bond_guid());
+            allData.setCbfo_fld_guid(newData.getFld_guid());
+            allData.setCbfo_fld_object_guid(newData.getFld_object_guid());
+            collector.collect(allData);
+        }
+        if (operationType.equals(Config.UPDATE)){
+            HashMap<String, String> updateInfoMap = newData.getUpdateInfoMap();
+            if (updateInfoMap.containsKey("fld_object_guid") && !updateInfoMap.containsKey("fld_bond_guid")){
+                String oldFldObjectGuid = newData.getUpdateInfoMap().get("fld_object_guid");
+                //todo 维护idx的关联关系
+                JdbcUtils.updateSqlByValue(fldObjectGuid,oldFldObjectGuid);
+                //todo 把旧的缓存清除
+                mapState.remove(oldFldObjectGuid);
+                //todo 添加新的缓存
+                mapState.put(fldObjectGuid, newData);
+                //todo 下游不发生变化，不用传递
+                return;
+            }
+            if (!updateInfoMap.containsKey("fld_object_guid") && updateInfoMap.containsKey("fld_bond_guid")){
+                //todo 直接覆盖掉缓存
+                mapState.put(fldObjectGuid, newData);
+                //todo 下游关联键发生变化，需要发送出去
+                AllData allData = new AllData();
+                allData.setOperation_type("EsCommerceBondFeeObject" + "#" + operationType);
+                allData.setCbfo_fld_bond_guid(newData.getFld_bond_guid());
+                allData.setCbfo_fld_guid(newData.getFld_guid());
+                allData.setCbfo_fld_object_guid(newData.getFld_object_guid());
+                collector.collect(allData);
+            }
+            if (updateInfoMap.containsKey("fld_object_guid") && updateInfoMap.containsKey("fld_bond_guid")){
+                String oldFldObjectGuid = newData.getUpdateInfoMap().get("fld_object_guid");
+                //todo 维护idx的关联关系
+                JdbcUtils.updateSqlByValue(fldObjectGuid,oldFldObjectGuid);
+                //todo 把旧的缓存清除
+                mapState.remove(oldFldObjectGuid);
+                //todo 添加新的缓存
+                mapState.put(fldObjectGuid, newData);
+                AllData allData = new AllData();
+                allData.setOperation_type("EsCommerceBondFeeObject" + "#" + operationType);
+                allData.setCbfo_fld_bond_guid(newData.getFld_bond_guid());
+                allData.setCbfo_fld_guid(newData.getFld_guid());
+                allData.setCbfo_fld_object_guid(newData.getFld_object_guid());
+                collector.collect(allData);
             }
         }
+//        if (isSend) {
+//            String sql = JdbcUtils.makeSQL(new Tuple2<>(Config.EsCommerceBondFeeObject, newData));
+//            boolean isSuccess = JdbcUtils.queryByTabAndKey(context, "idx_owe_es_commerce_bond_fee_object", fldObjectGuid, sql);
+//            log.info("=====================" + this.getClass() + ":更改宽表：=======================" + isSuccess);
+//            HashMap<String, String> updateInfoMap = newData.getUpdateInfoMap();
+//            if (operationType.equals(Config.INSERT)) {
+//                AllData allData = new AllData();
+//                allData.setOperation_type("EsCommerceBondFeeObject" + "#" + operationType);
+//                allData.setCbfo_fld_bond_guid(newData.getFld_bond_guid());
+//                allData.setCbfo_fld_guid(newData.getFld_guid());
+//                allData.setCbfo_fld_object_guid(newData.getFld_object_guid());
+//                collector.collect(allData);
+//            } else if (operationType.equals(Config.UPDATE)) {
+//                if (updateInfoMap.containsKey("fld_object_guid") && !updateInfoMap.containsKey("fld_bond_guid")){
+//
+//                }
+//                String[] vlaueTuple = updateInfoMap.get("fld_bond_guid").split("#");
+//                String newValue = vlaueTuple[0];
+//                String oldValue = vlaueTuple[1];
+//                AllData allData = new AllData();
+//                allData.setOperation_type("EsCommerceBondFeeObject" + "#" + Config.DELETE);
+//                allData.setCbfo_fld_bond_guid(oldValue);
+//                collector.collect(allData);
+//                allData.setOperation_type("EsCommerceBondFeeObject" + "#" + Config.UPDATE);
+//                allData.setCbfo_fld_bond_guid(newValue);
+//                collector.collect(allData);
+//            }
+//        }
     }
 }

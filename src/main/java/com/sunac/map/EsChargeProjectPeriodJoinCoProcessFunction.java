@@ -1,12 +1,11 @@
 package com.sunac.map;
 
 import com.sunac.Config;
-import com.sunac.domain.CommonDomain;
-import com.sunac.entity.AllData;
-import com.sunac.entity.EsChargeProject;
-import com.sunac.entity.EsChargeProjectPeriodJoin;
+import com.sunac.ow.owdomain.AllData;
+import com.sunac.ow.owdomain.EsChargeProjectPeriodJoin;
+import com.sunac.utils.HikariUtil;
 import com.sunac.utils.JdbcUtils;
-import com.sunac.utils.Util;
+import org.apache.commons.lang.StringUtils;
 import org.apache.flink.api.common.functions.RuntimeContext;
 import org.apache.flink.api.common.state.MapState;
 import org.apache.flink.api.common.state.MapStateDescriptor;
@@ -14,8 +13,11 @@ import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.functions.co.KeyedCoProcessFunction;
 import org.apache.flink.util.Collector;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import java.util.Iterator;
+import java.sql.Connection;
+import java.util.HashMap;
 
 /**
  * @Description: TODO
@@ -26,25 +28,31 @@ import java.util.Iterator;
 public class EsChargeProjectPeriodJoinCoProcessFunction extends KeyedCoProcessFunction<String, AllData, EsChargeProjectPeriodJoin, AllData> {
 
     MapState<String, EsChargeProjectPeriodJoin> mapState;
-    MapState<String, Void> keyMapState;
+    private static final Logger log = LoggerFactory.getLogger(EsChargeProjectPeriodJoinCoProcessFunction.class);
+    transient Connection connection = null;
+
     @Override
     public void open(Configuration parameters) throws Exception {
         RuntimeContext runtimeContext = getRuntimeContext();
-        mapState = runtimeContext.getMapState(new MapStateDescriptor<String, EsChargeProjectPeriodJoin>("map_stat", String.class, EsChargeProjectPeriodJoin.class));
-        keyMapState = runtimeContext.getMapState(new MapStateDescriptor<String, Void>("map_stat_2", String.class, Void.class));
+        mapState = runtimeContext.getMapState(new MapStateDescriptor<>("map_stat", String.class, EsChargeProjectPeriodJoin.class));
+        connection = HikariUtil.getInstance().getConnection();
+        log.info("=====================" + this.getClass() + ":创建HikariUtil成功！！！=======================");
     }
 
     @Override
     public void processElement1(AllData allData, KeyedCoProcessFunction<String, AllData, EsChargeProjectPeriodJoin, AllData>.Context context, Collector<AllData> collector) throws Exception {
-        String operation_type = allData.getOperation_type();
-        String fld_guid = allData.getFld_guid();
-        if (null != fld_guid && !"".equals(fld_guid)) {
-            keyMapState.put(fld_guid, null);
+        String operationType = allData.getOperation_type();
+        String fldGuid = allData.getFld_guid();
+        String fldProjectGuid = allData.getFld_project_guid();
+        if (StringUtils.isNotBlank(fldGuid)) {
+            Tuple2<Connection, Boolean> tp = JdbcUtils.insertOrIgnore2(connection,"idx_owe_es_charge_project_period_join", fldGuid, fldProjectGuid);
+            connection = tp.f0;
+            log.info("=====================" + this.getClass() + ":插入fld_guid成功！！！=======================");
         }
-        if (operation_type.equals(Config.PASS)) {
-            collector.collect(allData);
+        if (operationType.equals(Config.PASS)) {
+            return;
         }
-        if (operation_type.equals(Config.INSERT) || operation_type.equals(Config.UPDATE)) {
+        if (operationType.equals(Config.INSERT) || operationType.equals(Config.UPDATE)) {
             EsChargeProjectPeriodJoin esChargeProjectPeriodJoin = mapState.get(allData.getFld_project_guid());
             if (esChargeProjectPeriodJoin != null) {
                 allData.setPj_fld_project_guid(esChargeProjectPeriodJoin.getFld_project_guid());
@@ -60,37 +68,48 @@ public class EsChargeProjectPeriodJoinCoProcessFunction extends KeyedCoProcessFu
 
     @Override
     public void processElement2(EsChargeProjectPeriodJoin newData, KeyedCoProcessFunction<String, AllData, EsChargeProjectPeriodJoin, AllData>.Context context, Collector<AllData> collector) throws Exception {
-        String operation_type = newData.getOperation_type();
-        if (operation_type.equals(Config.PASS) || (operation_type.equals(Config.UPDATE) && newData.getUpdateInfoMap().size() == 0)) {
+        String operationType = newData.getOperation_type();
+        if (operationType.equals(Config.PASS) || (operationType.equals(Config.UPDATE) && newData.getUpdateInfoMap().size() == 0)) {
             return;
         }
 
-        String fld_project_guid = newData.getFld_project_guid();
-        Iterator<String> iterator = keyMapState.keys().iterator();
-        boolean isHaveKey = iterator.hasNext();
+        String fldProjectGuid = newData.getFld_project_guid();
         boolean isSend = false;
-        if (operation_type.equals(Config.DELETE)) {
-            mapState.remove(fld_project_guid);
+        if (operationType.equals(Config.DELETE)) {
+            mapState.remove(fldProjectGuid);
             isSend = true;
-        } else if (operation_type.equals(Config.INSERT) || operation_type.equals(Config.UPDATE)) {
-            mapState.put(fld_project_guid, newData);
+        } else if (operationType.equals(Config.INSERT) || operationType.equals(Config.UPDATE)) {
+            mapState.put(fldProjectGuid, newData);
             isSend = true;
-            //TODO: allData.setFld_object_class_guid(esInfoObject.getFld_class_guid());--用于关联：ds_fd_es_info_object_class_af oc
-            if (newData.getUpdateInfoMap().containsKey("fld_period_guid")) {
-                AllData allData = new AllData();
-                allData.setOperation_type("EsChargeProjectPeriodJoin" + "#" + "fld_period_guid");
-                allData.setPj_fld_project_guid(newData.getFld_project_guid());
-                allData.setPj_fld_period_guid(newData.getFld_period_guid());
-                allData.setPj_fld_guid(newData.getFld_guid());
-                collector.collect(allData);
-            }
         }
-        if (isSend && isHaveKey) {
-            String sql = JdbcUtils.makeSQL(new Tuple2<String, CommonDomain>(Config.EsChargeProjectPeriodJoin, newData));
-            if (null != sql) {
-                while (iterator.hasNext()) {
-                    String fld_guid_op = iterator.next();
-                    Util.sendData2SlideStream(context, sql, fld_guid_op);
+        if (isSend) {
+            String sql = JdbcUtils.makeSQL(new Tuple2<>(Config.EsChargeProjectPeriodJoin, newData));
+            Tuple2<Connection, Boolean> tp2 = JdbcUtils.queryByTabAndKey2(context, connection,"idx_owe_es_charge_project_period_join", fldProjectGuid, sql);
+            connection = tp2.f0;
+            String flag = (tp2.f1 ? "成功" : "失败");
+            log.info("=====================" + this.getClass() + ":更改宽表：=======================" + flag);
+            HashMap<String, String> updateInfoMap = newData.getUpdateInfoMap();
+            if (operationType.equals(Config.INSERT)) {
+                if (StringUtils.isNotBlank(newData.getFld_period_guid())){
+                    AllData allData = new AllData();
+                    allData.setOperation_type("EsChargeProjectPeriodJoin" + "#" + operationType);
+                    allData.setPj_fld_period_guid(newData.getFld_period_guid());
+                    collector.collect(allData);
+                }
+            } else if (operationType.equals(Config.UPDATE) && updateInfoMap.containsKey("fld_period_guid")) {
+                String[] vlaueTuple = updateInfoMap.get("fld_main_guid").split("#");
+                String newValue = vlaueTuple[0];
+                String oldValue = vlaueTuple[1];
+                AllData allData = new AllData();
+                if (StringUtils.isNotBlank(oldValue)){
+                    allData.setOperation_type("EsChargeProjectPeriodJoin" + "#" + Config.DELETE);
+                    allData.setPj_fld_period_guid(oldValue);
+                    collector.collect(allData);
+                }
+                if (StringUtils.isNotBlank(newValue)){
+                    allData.setOperation_type("EsChargeProjectPeriodJoin" + "#" + Config.INSERT);
+                    allData.setPj_fld_period_guid(newValue);
+                    collector.collect(allData);
                 }
             }
         }

@@ -1,27 +1,24 @@
 package com.sunac.map;
 
 import com.sunac.Config;
-import com.sunac.domain.CommonDomain;
-import com.sunac.entity.AllData;
-import com.sunac.entity.EsChargeSettleAccountsDetail;
+import com.sunac.ow.owdomain.AllData;
+import com.sunac.ow.owdomain.EsChargeSettleAccountsDetail;
+import com.sunac.utils.HikariUtil;
 import com.sunac.utils.JdbcUtils;
-import com.sunac.utils.Util;
-import org.apache.commons.codec.digest.DigestUtils;
-import org.apache.commons.lang3.StringUtils;
+import com.sunac.utils.MakeMd5Utils;
+import org.apache.commons.lang.StringUtils;
 import org.apache.flink.api.common.functions.RuntimeContext;
 import org.apache.flink.api.common.state.MapState;
 import org.apache.flink.api.common.state.MapStateDescriptor;
-import org.apache.flink.api.common.typeinfo.TypeHint;
-import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.functions.co.KeyedCoProcessFunction;
 import org.apache.flink.util.Collector;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
+import java.sql.Connection;
 import java.util.HashMap;
-import java.util.Iterator;
-import java.util.Map;
 
 /**
  * @Description: TODO
@@ -31,27 +28,32 @@ import java.util.Map;
  */
 public class EsChargeSettleAccountsDetailCoMapFunction extends KeyedCoProcessFunction<String, AllData, EsChargeSettleAccountsDetail, AllData> {
     MapState<String, EsChargeSettleAccountsDetail> mapState;
-    MapState<String, AllData> keyMapState;
+    private static final Logger log = LoggerFactory.getLogger(EsChargeSettleAccountsDetailCoMapFunction.class);
+    transient Connection connection = null;
+
     @Override
     public void open(Configuration parameters) throws Exception {
         RuntimeContext runtimeContext = getRuntimeContext();
-        mapState = runtimeContext.getMapState(new MapStateDescriptor<String, EsChargeSettleAccountsDetail>("map_stat", String.class, EsChargeSettleAccountsDetail.class));
-        keyMapState = runtimeContext.getMapState(new MapStateDescriptor<String, AllData>("map_stat_2", String.class, AllData.class));
-
+        mapState = runtimeContext.getMapState(new MapStateDescriptor<>("map_stat", String.class, EsChargeSettleAccountsDetail.class));
+        connection = HikariUtil.getInstance().getConnection();
+        log.info("=====================" + this.getClass() + ":创建HikariUtil成功！！！=======================");
     }
+
     @Override
     public void processElement1(AllData allData, Context context, Collector<AllData> collector) throws Exception {
         String operationType = allData.getOperation_type();
         String fldGuid = allData.getFld_guid();
-        if (null != fldGuid && !"".equals(fldGuid)) {
-            keyMapState.put(fldGuid, null);
+        if (StringUtils.isNotBlank(fldGuid)) {
+            Tuple2<Connection, Boolean> tp = JdbcUtils.insertOrIgnore2(connection,"idx_owe_es_charge_settle_accounts_detail", fldGuid, MakeMd5Utils.makeMd5(allData.getFld_guid() , allData.getFld_area_guid()));
+            connection = tp.f0;
+            log.info("=====================" + this.getClass() + ":插入fld_guid成功！！！=======================");
         }
         if (operationType.equals(Config.PASS)) {
-            collector.collect(allData);
+            return;
         }
         // TODO insert事件
         if (operationType.equals(Config.INSERT) || operationType.equals(Config.UPDATE)) {
-            EsChargeSettleAccountsDetail oldData = mapState.get(DigestUtils.md5Hex(allData.getFld_guid() + allData.getFld_area_guid()));
+            EsChargeSettleAccountsDetail oldData = mapState.get(MakeMd5Utils.makeMd5(allData.getFld_guid() , allData.getFld_area_guid()));
             if (oldData != null && oldData.getFld_status() == 1) {
                 allData.setFld_settle_adjust_guid(oldData.getFld_adjust_guid());
                 allData.setFld_owner_fee_guid(oldData.getFld_owner_fee_guid());
@@ -63,10 +65,11 @@ public class EsChargeSettleAccountsDetailCoMapFunction extends KeyedCoProcessFun
                 allData.setFld_area_guid(oldData.getFld_area_guid());
             } else {
                 allData.setAd_fld_main_guid(Config.SINGLE_PARTITION);
+                //todo 还不知道能不能关联上呢
+                allData.setFld_area_guid(Config.SINGLE_PARTITION);
             }
             collector.collect(allData);
         }
-
     }
 
     @Override
@@ -75,9 +78,6 @@ public class EsChargeSettleAccountsDetailCoMapFunction extends KeyedCoProcessFun
         if (operationType.equals(Config.PASS) || (operationType.equals(Config.UPDATE) && newData.getUpdateInfoMap().size() == 0)) {
             return;
         }
-        Iterator<String> iterator = keyMapState.keys().iterator();
-        boolean isHaveKey = iterator.hasNext();
-        System.out.println("isHaveKey = " + isHaveKey);
         boolean isSend = false;
         Integer fldStatus = newData.getFld_status();
         String pk = newData.getPk();
@@ -89,27 +89,46 @@ public class EsChargeSettleAccountsDetailCoMapFunction extends KeyedCoProcessFun
                 //TODO:fld_main_guid:用于es_charge_settle_accounts_detail加到宽表然后关联es_charge_settle_accounts_main使用
             } else if (operationType.equals(Config.INSERT) || (operationType.equals(Config.UPDATE) && newData.getUpdateInfoMap().size() > 0)) {
                 mapState.put(pk, newData);
-                System.out.println("insert进来了");
                 isSend = true;
-
-                if (newData.getUpdateInfoMap().containsKey("fld_main_guid")) {
-                    AllData allData = new AllData();
-                    allData.setOperation_type("EsChargeSettleAccountsDetail" + "#" + "fld_main_guid");
-                    allData.setAd_fld_main_guid(oldData.getFld_main_guid());
-                    allData.setAd_fld_area_guid(oldData.getFld_area_guid());
-                    allData.setAd_fld_guid(oldData.getFld_guid());
-                    allData.setFld_settle_adjust_guid(oldData.getFld_adjust_guid());
-                    allData.setFld_owner_fee_guid(oldData.getFld_owner_fee_guid());
-                    allData.setFld_area_guid(oldData.getFld_area_guid());
-                    collector.collect(allData);
-                }
             }
-            if (isSend && isHaveKey) {
-                String sql = JdbcUtils.makeSQL(new Tuple2<String, CommonDomain>(Config.EsChargeSettleAccountsDetail, newData));
-                if (null != sql) {
-                    while (iterator.hasNext()) {
-                        String fldGuidOp = iterator.next();
-                        Util.sendData2SlideStream(context, sql, fldGuidOp);
+            if (isSend) {
+                String sql = JdbcUtils.makeSQL(new Tuple2<>(Config.EsChargeSettleAccountsDetail, newData));
+                Tuple2<Connection, Boolean> tp2 = JdbcUtils.queryByTabAndKey2(context,connection, "idx_owe_es_charge_settle_accounts_detail", pk, sql);
+                connection = tp2.f0;
+                String flag = (tp2.f1 ? "成功" : "失败");
+                log.info("=====================" + this.getClass() + ":更改宽表：=======================" + flag);
+                HashMap<String, String> updateInfoMap = newData.getUpdateInfoMap();
+                if (operationType.equals(Config.INSERT)) {
+                    if (StringUtils.isNotBlank(oldData.getFld_main_guid())){
+                        AllData allData = new AllData();
+                        allData.setOperation_type("EsChargeSettleAccountsDetail" + "#" + operationType);
+                        allData.setAd_fld_main_guid(oldData.getFld_main_guid());
+                        allData.setAd_fld_area_guid(oldData.getFld_area_guid());
+                        allData.setAd_fld_guid(oldData.getFld_guid());
+                        allData.setFld_settle_adjust_guid(oldData.getFld_adjust_guid());
+                        allData.setFld_owner_fee_guid(oldData.getFld_owner_fee_guid());
+
+                        // todo 还不知道能不能关联上呢
+                        allData.setFld_area_guid(oldData.getFld_area_guid());
+                        collector.collect(allData);
+                    }
+                } else if (operationType.equals(Config.UPDATE) && updateInfoMap.containsKey("fld_main_guid")) {
+                    String[] vlaueTuple = updateInfoMap.get("fld_main_guid").split("#");
+                    String newValue = vlaueTuple[0];
+                    String oldValue = vlaueTuple[1];
+                    AllData allData = new AllData();
+                    allData.setAd_fld_area_guid(oldData.getFld_area_guid());
+                    // todo 还不知道能不能关联上呢
+                    allData.setFld_area_guid(oldData.getFld_area_guid());
+                    if (StringUtils.isNotBlank(oldValue)){
+                        allData.setOperation_type("EsChargeSettleAccountsDetail" + "#" + Config.DELETE);
+                        allData.setAd_fld_main_guid(oldValue);
+                        collector.collect(allData);
+                    }
+                    if (StringUtils.isNotBlank(newValue)){
+                        allData.setOperation_type("EsChargeSettleAccountsDetail" + "#" + Config.INSERT);
+                        allData.setAd_fld_main_guid(newValue);
+                        collector.collect(allData);
                     }
                 }
             }

@@ -1,13 +1,14 @@
 package com.sunac.map;
 
 import com.sunac.Config;
-import com.sunac.domain.CommonDomain;
-import com.sunac.domain.EsInfoObjectAndOwnerDomain;
-import com.sunac.entity.AllData;
-import com.sunac.entity.EsInfoObjectAndOwner;
+import com.sunac.ow.owdomain.AllData;
+import com.sunac.ow.owdomain.EsInfoObjectAndOwner;
+import com.sunac.sink.CommonSink;
+import com.sunac.utils.HikariUtil;
 import com.sunac.utils.JdbcUtils;
-import com.sunac.utils.Util;
+import com.sunac.utils.MakeMd5Utils;
 import org.apache.commons.codec.digest.DigestUtils;
+import org.apache.commons.lang.StringUtils;
 import org.apache.flink.api.common.functions.RuntimeContext;
 import org.apache.flink.api.common.state.MapState;
 import org.apache.flink.api.common.state.MapStateDescriptor;
@@ -15,8 +16,10 @@ import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.functions.co.KeyedCoProcessFunction;
 import org.apache.flink.util.Collector;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import java.util.Iterator;
+import java.sql.Connection;
 
 /**
  * @Description: TODO
@@ -26,27 +29,31 @@ import java.util.Iterator;
  */
 public class EsInfoObjectAndOwnerCoMapFunction extends KeyedCoProcessFunction<String, AllData, EsInfoObjectAndOwner, AllData> {
     MapState<String, EsInfoObjectAndOwner> mapState;
-    MapState<String, Void> keyMapState;
+    private static final Logger log = LoggerFactory.getLogger(EsInfoObjectAndOwnerCoMapFunction.class);
+    transient Connection connection = null;
 
     @Override
     public void open(Configuration parameters) throws Exception {
         RuntimeContext runtimeContext = getRuntimeContext();
-        mapState = runtimeContext.getMapState(new MapStateDescriptor<String, EsInfoObjectAndOwner>("map_stat", String.class, EsInfoObjectAndOwner.class));
-        keyMapState = runtimeContext.getMapState(new MapStateDescriptor<String, Void>("map_stat_2", String.class, Void.class));
+        mapState = runtimeContext.getMapState(new MapStateDescriptor<>("map_stat", String.class, EsInfoObjectAndOwner.class));
+        connection = HikariUtil.getInstance().getConnection();
+        log.info("=====================" + this.getClass() + ":创建HikariUtil成功！！！=======================");
     }
 
     @Override
     public void processElement1(AllData allData, Context context, Collector<AllData> collector) throws Exception {
-        String operation_type = allData.getOperation_type();
-        String fld_guid = allData.getFld_guid();
-        if (null != fld_guid && !"".equals(fld_guid)) {
-            keyMapState.put(fld_guid, null);
+        String operationType = allData.getOperation_type();
+        String fldGuid = allData.getFld_guid();
+        if (StringUtils.isNotBlank(fldGuid)) {
+            Tuple2<Connection, Boolean> tp = JdbcUtils.insertOrIgnore2(connection,"idx_owe_es_info_object_and_owner", fldGuid, MakeMd5Utils.makeMd5(allData.getO_fld_guid() , allData.getW_fld_guid() , allData.getFld_area_guid()));
+            connection = tp.f0;
+            log.info("=====================" + this.getClass() + ":插入fld_guid成功！！！=======================");
         }
-        if (operation_type.equals(Config.PASS)) {
-            collector.collect(allData);
+        if (operationType.equals(Config.PASS)) {
+            return;
         }
-        if (operation_type.equals(Config.INSERT) || operation_type.equals(Config.UPDATE)) {
-            EsInfoObjectAndOwner esInfoObjectAndOwner = mapState.get(DigestUtils.md5Hex(allData.getO_fld_guid() + allData.getW_fld_guid() + allData.getFld_area_guid()));
+        if (operationType.equals(Config.INSERT) || operationType.equals(Config.UPDATE)) {
+            EsInfoObjectAndOwner esInfoObjectAndOwner = mapState.get(MakeMd5Utils.makeMd5(allData.getO_fld_guid() , allData.getW_fld_guid() , allData.getFld_area_guid()));
             if (esInfoObjectAndOwner != null) {
                 allData.setOao_fld_guid(esInfoObjectAndOwner.getFld_guid());
                 allData.setOao_fld_object_guid(esInfoObjectAndOwner.getFld_object_guid());
@@ -64,31 +71,27 @@ public class EsInfoObjectAndOwnerCoMapFunction extends KeyedCoProcessFunction<St
 
     @Override
     public void processElement2(EsInfoObjectAndOwner newData, Context context, Collector<AllData> collector) throws Exception {
-        String operation_type = newData.getOperation_type();
-        if (operation_type.equals(Config.PASS) || (operation_type.equals(Config.UPDATE) && newData.getUpdateInfoMap().size() == 0)) {
+        String operationType = newData.getOperation_type();
+        if (operationType.equals(Config.PASS) || (operationType.equals(Config.UPDATE) && newData.getUpdateInfoMap().size() == 0)) {
             return;
         }
-        Iterator<String> iterator = keyMapState.keys().iterator();
-        boolean isHaveKey = iterator.hasNext();
         boolean isSend = false;
         String pk = newData.getPk();
         EsInfoObjectAndOwner oldData = mapState.get(pk);
         if (newData.compareTo(oldData) <= 0) {
-            if (operation_type.equals(Config.DELETE)) {
+            if (operationType.equals(Config.DELETE)) {
                 mapState.remove(pk);
                 isSend = true;
-            } else if (operation_type.equals(Config.INSERT) || (operation_type.equals(Config.UPDATE) && newData.getUpdateInfoMap().size() > 0)) {
+            } else if (operationType.equals(Config.INSERT) || (operationType.equals(Config.UPDATE) && newData.getUpdateInfoMap().size() > 0)) {
                 mapState.put(pk, newData);
                 isSend = true;
             }
-            if (isSend && isHaveKey) {
-                String sql = JdbcUtils.makeSQL(new Tuple2<String, CommonDomain>(Config.EsInfoObjectAndOwner, newData));
-                if (null != sql) {
-                    while (iterator.hasNext()) {
-                        String fld_guid_op = iterator.next();
-                        Util.sendData2SlideStream(context, sql, fld_guid_op);
-                    }
-                }
+            if (isSend) {
+                String sql = JdbcUtils.makeSQL(new Tuple2<>(Config.EsInfoObjectAndOwner, newData));
+                Tuple2<Connection, Boolean> tp2 = JdbcUtils.queryByTabAndKey2(context, connection,"idx_owe_es_info_object_and_owner", pk, sql);
+                connection = tp2.f0;
+                String flag = (tp2.f1 ? "成功" : "失败");
+                log.info("=====================" + this.getClass() + ":更改宽表：=======================" + flag);
             }
         }
     }

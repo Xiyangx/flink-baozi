@@ -1,0 +1,152 @@
+CREATE TABLE `idx_owe_es_info_area_info` (
+  `fld_guid` varchar(200) COLLATE utf8mb4_general_ci NOT NULL COMMENT '主表主键',
+  `fld_value` varchar(200) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '关联键',
+  `update_time` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '时间',
+  PRIMARY KEY (`fld_guid`) /*T![clustered_index] NONCLUSTERED */,
+  KEY `idx_fld_value` (`fld_value`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `idx_owe_es_charge_project` (
+  `fld_guid` varchar(200) COLLATE utf8mb4_general_ci NOT NULL COMMENT '主表主键',
+  `fld_value` varchar(200) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '关联键',
+  `update_time` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '时间',
+  PRIMARY KEY (`fld_guid`) /*T![clustered_index] NONCLUSTERED */,
+  KEY `idx_fld_value` (`fld_value`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `idx_owe_es_charge_project_period_join` (
+  `fld_guid` varchar(200) COLLATE utf8mb4_general_ci NOT NULL COMMENT '主表主键',
+  `fld_value` varchar(200) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '关联键',
+  `update_time` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '时间',
+  PRIMARY KEY (`fld_guid`) /*T![clustered_index] NONCLUSTERED */,
+  KEY `idx_fld_value` (`fld_value`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `idx_owe_es_charge_project_period` (
+  `fld_guid` varchar(200) COLLATE utf8mb4_general_ci NOT NULL COMMENT '主表主键',
+  `fld_value` varchar(200) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '关联键',
+  `update_time` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '时间',
+  PRIMARY KEY (`fld_guid`) /*T![clustered_index] NONCLUSTERED */,
+  KEY `idx_fld_value` (`fld_value`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `idx_owe_es_info_owner` (
+  `fld_guid` varchar(200) COLLATE utf8mb4_general_ci NOT NULL COMMENT '主表主键',
+  `fld_value` varchar(200) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '关联键',
+  `update_time` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '时间',
+  PRIMARY KEY (`fld_guid`) /*T![clustered_index] NONCLUSTERED */,
+  KEY `idx_fld_value` (`fld_value`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `idx_owe_es_info_object_and_owner` (
+  `fld_guid` varchar(200) COLLATE utf8mb4_general_ci NOT NULL COMMENT '主表主键',
+  `fld_value` varchar(200) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '关联键',
+  `update_time` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '时间',
+  PRIMARY KEY (`fld_guid`) /*T![clustered_index] NONCLUSTERED */,
+  KEY `idx_fld_value` (`fld_value`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `idx_owe_es_info_object_class` (
+  `fld_guid` varchar(200) COLLATE utf8mb4_general_ci NOT NULL COMMENT '主表主键',
+  `fld_value` varchar(200) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '关联键',
+  `update_time` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '时间',
+  PRIMARY KEY (`fld_guid`) /*T![clustered_index] NONCLUSTERED */,
+  KEY `idx_fld_value` (`fld_value`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `idx_owe_es_charge_settle_accounts_detail` (
+  `fld_guid` varchar(200) COLLATE utf8mb4_general_ci NOT NULL COMMENT '主表主键',
+  `fld_value` varchar(200) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '关联键',
+  `update_time` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '时间',
+  PRIMARY KEY (`fld_guid`) /*T![clustered_index] NONCLUSTERED */,
+  KEY `idx_fld_value` (`fld_value`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `idx_owe_es_charge_settle_accounts_main` (
+  `fld_guid` varchar(200) COLLATE utf8mb4_general_ci NOT NULL COMMENT '主表主键',
+  `fld_value` varchar(200) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '关联键',
+  `update_time` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '时间',
+  PRIMARY KEY (`fld_guid`) /*T![clustered_index] NONCLUSTERED */,
+  KEY `idx_fld_value` (`fld_value`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `idx_owe_es_charge_incoming_data` (
+  `fld_guid` varchar(200) COLLATE utf8mb4_general_ci NOT NULL COMMENT '主表主键',
+  `fld_value` varchar(200) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '关联键',
+  `update_time` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '时间',
+  PRIMARY KEY (`fld_guid`) /*T![clustered_index] NONCLUSTERED */,
+  KEY `idx_fld_value` (`fld_value`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `idx_owe_es_charge_incoming_fee` (
+  `fld_guid` varchar(200) COLLATE utf8mb4_general_ci NOT NULL COMMENT '主表主键',
+  `fld_value` varchar(200) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '关联键',
+  `update_time` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '时间',
+  PRIMARY KEY (`fld_guid`) /*T![clustered_index] NONCLUSTERED */,
+  KEY `idx_fld_value` (`fld_value`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `idx_owe_es_charge_rate_result` (
+  `fld_guid` varchar(200) COLLATE utf8mb4_general_ci NOT NULL COMMENT '主表主键',
+  `fld_value` varchar(200) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '关联键',
+  `update_time` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '时间',
+  PRIMARY KEY (`fld_guid`) /*T![clustered_index] NONCLUSTERED */,
+  KEY `idx_fld_value` (`fld_value`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `idx_owe_es_charge_ticket_pay_detail` (
+  `fld_guid` varchar(200) COLLATE utf8mb4_general_ci NOT NULL COMMENT '主表主键',
+  `fld_value` varchar(200) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '关联键',
+  `update_time` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '时间',
+  PRIMARY KEY (`fld_guid`) /*T![clustered_index] NONCLUSTERED */,
+  KEY `idx_fld_value` (`fld_value`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `idx_owe_es_charge_ticket_pay_operate` (
+  `fld_guid` varchar(200) COLLATE utf8mb4_general_ci NOT NULL COMMENT '主表主键',
+  `fld_value` varchar(200) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '关联键',
+  `update_time` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '时间',
+  PRIMARY KEY (`fld_guid`) /*T![clustered_index] NONCLUSTERED */,
+  KEY `idx_fld_value` (`fld_value`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `idx_owe_es_commerce_bond_fee_object` (
+  `fld_guid` varchar(200) COLLATE utf8mb4_general_ci NOT NULL COMMENT '主表主键',
+  `fld_value` varchar(200) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '关联键',
+  `update_time` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '时间',
+  PRIMARY KEY (`fld_guid`) /*T![clustered_index] NONCLUSTERED */,
+  KEY `idx_fld_value` (`fld_value`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `idx_owe_es_commerce_bond_main` (
+  `fld_guid` varchar(200) COLLATE utf8mb4_general_ci NOT NULL COMMENT '主表主键',
+  `fld_value` varchar(200) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '关联键',
+  `update_time` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '时间',
+  PRIMARY KEY (`fld_guid`) /*T![clustered_index] NONCLUSTERED */,
+  KEY `idx_fld_value` (`fld_value`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `idx_owe_es_info_param_info` (
+  `fld_guid` varchar(200) COLLATE utf8mb4_general_ci NOT NULL COMMENT '主表主键',
+  `fld_value` varchar(200) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '关联键',
+  `update_time` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '时间',
+  PRIMARY KEY (`fld_guid`) /*T![clustered_index] NONCLUSTERED */,
+  KEY `idx_fld_value` (`fld_value`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `idx_owe_es_info_object` (
+  `fld_guid` varchar(200) COLLATE utf8mb4_general_ci NOT NULL COMMENT '主表主键',
+  `fld_value` varchar(200) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '关联键',
+  `update_time` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '时间',
+  PRIMARY KEY (`fld_guid`) /*T![clustered_index] NONCLUSTERED */,
+  KEY `idx_fld_value` (`fld_value`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `idx_owe_es_charge_rate_result_tax` (
+  `fld_guid` varchar(200) COLLATE utf8mb4_general_ci NOT NULL COMMENT '主表主键',
+  `fld_amount` decimal(18,2) DEFAULT NULL COMMENT '主表的实收金额（含税）',
+  `fld_value` varchar(200) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '关联键',
+  `update_time` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '时间',
+  PRIMARY KEY (`fld_guid`) /*T![clustered_index] NONCLUSTERED */,
+  KEY `idx_fld_value` (`fld_value`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;

@@ -1,11 +1,11 @@
 package com.sunac.map;
 
 import com.sunac.Config;
-import com.sunac.domain.CommonDomain;
-import com.sunac.entity.AllData;
-import com.sunac.entity.EsInfoOwner;
+import com.sunac.ow.owdomain.AllData;
+import com.sunac.ow.owdomain.EsInfoOwner;
+import com.sunac.utils.HikariUtil;
 import com.sunac.utils.JdbcUtils;
-import com.sunac.utils.Util;
+import org.apache.commons.lang.StringUtils;
 import org.apache.flink.api.common.functions.RuntimeContext;
 import org.apache.flink.api.common.state.MapState;
 import org.apache.flink.api.common.state.MapStateDescriptor;
@@ -13,8 +13,10 @@ import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.functions.co.KeyedCoProcessFunction;
 import org.apache.flink.util.Collector;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import java.util.Iterator;
+import java.sql.Connection;
 
 /**
  * @Description: TODO
@@ -25,25 +27,29 @@ import java.util.Iterator;
 public class EsInfoOwnerCoProcessFunction extends KeyedCoProcessFunction<String, AllData, EsInfoOwner, AllData> {
 
     MapState<String, EsInfoOwner> mapState;
-    MapState<String, Void> keyMapState;
+    private static final Logger log = LoggerFactory.getLogger(EsInfoOwnerCoProcessFunction.class);
+    transient Connection connection = null;
     @Override
     public void open(Configuration parameters) throws Exception {
         RuntimeContext runtimeContext = getRuntimeContext();
-        mapState = runtimeContext.getMapState(new MapStateDescriptor<String, EsInfoOwner>("map_stat", String.class, EsInfoOwner.class));
-        keyMapState = runtimeContext.getMapState(new MapStateDescriptor<String, Void>("map_stat_2", String.class, Void.class));
+        mapState = runtimeContext.getMapState(new MapStateDescriptor<>("map_stat", String.class, EsInfoOwner.class));
+        connection = HikariUtil.getInstance().getConnection();
+        log.info("=====================" + this.getClass() + ":创建HikariUtil成功！！！=======================");
     }
 
     @Override
     public void processElement1(AllData allData, KeyedCoProcessFunction<String, AllData, EsInfoOwner, AllData>.Context context, Collector<AllData> collector) throws Exception {
-        String operation_type = allData.getOperation_type();
-        String fld_guid = allData.getFld_guid();
-        if (null != fld_guid && !"".equals(fld_guid)) {
-            keyMapState.put(fld_guid, null);
+        String operationType = allData.getOperation_type();
+        String fldGuid = allData.getFld_guid();
+        if (StringUtils.isNotBlank(fldGuid)) {
+            Tuple2<Connection, Boolean> tp = JdbcUtils.insertOrIgnore2(connection,"idx_owe_es_info_owner", fldGuid, allData.getFld_owner_guid());
+            connection = tp.f0;
+            log.info("=====================" + this.getClass() + ":插入fld_guid成功！！！=======================");
         }
-        if (operation_type.equals(Config.PASS)) {
-            collector.collect(allData);
+        if (operationType.equals(Config.PASS)) {
+            return;
         }
-        if (operation_type.equals(Config.INSERT) || operation_type.equals(Config.UPDATE)) {
+        if (operationType.equals(Config.INSERT) || operationType.equals(Config.UPDATE)) {
             EsInfoOwner esInfoOwner = mapState.get(allData.getFld_owner_guid());
             if (esInfoOwner != null) {
                 allData.setW_fld_guid(esInfoOwner.getFld_guid());
@@ -59,30 +65,26 @@ public class EsInfoOwnerCoProcessFunction extends KeyedCoProcessFunction<String,
 
     @Override
     public void processElement2(EsInfoOwner newData, KeyedCoProcessFunction<String, AllData, EsInfoOwner, AllData>.Context context, Collector<AllData> collector) throws Exception {
-        String operation_type = newData.getOperation_type();
-        if (operation_type.equals(Config.PASS) || (operation_type.equals(Config.UPDATE) && newData.getUpdateInfoMap().size() == 0)) {
+        String operationType = newData.getOperation_type();
+        if (operationType.equals(Config.PASS) || (operationType.equals(Config.UPDATE) && newData.getUpdateInfoMap().size() == 0)) {
             return;
         }
-        String fld_guid = newData.getFld_guid();
-        Iterator<String> iterator = keyMapState.keys().iterator();
-        boolean isHaveKey = iterator.hasNext();
+        String fldGuid = newData.getFld_guid();
         boolean isSend = false;
 
-        if (operation_type.equals(Config.DELETE)) {
-            mapState.remove(fld_guid);
+        if (operationType.equals(Config.DELETE)) {
+            mapState.remove(fldGuid);
             isSend = true;
-        } else if (operation_type.equals(Config.INSERT) || (operation_type.equals(Config.UPDATE) && newData.getUpdateInfoMap().size() > 0)) {
-            mapState.put(fld_guid, newData);
+        } else if (operationType.equals(Config.INSERT) || (operationType.equals(Config.UPDATE) && newData.getUpdateInfoMap().size() > 0)) {
+            mapState.put(fldGuid, newData);
             isSend = true;
         }
-        if (isSend && isHaveKey) {
-            String sql = JdbcUtils.makeSQL(new Tuple2<String, CommonDomain>(Config.EsInfoOwner, newData));
-            if (null != sql) {
-                while (iterator.hasNext()) {
-                    String fld_guid_op = iterator.next();
-                    Util.sendData2SlideStream(context, sql, fld_guid_op);
-                }
-            }
+        if (isSend) {
+            String sql = JdbcUtils.makeSQL(new Tuple2<>(Config.EsInfoOwner, newData));
+            Tuple2<Connection, Boolean> tp2 = JdbcUtils.queryByTabAndKey2(context, connection,"idx_owe_es_info_owner", fldGuid, sql);
+            connection = tp2.f0;
+            String flag = (tp2.f1 ? "成功" : "失败");
+            log.info("=====================" + this.getClass() + ":更改宽表：=======================" + flag);
         }
     }
 }

@@ -1,13 +1,12 @@
 package com.sunac.map;
 
 import com.sunac.Config;
-import com.sunac.domain.CommonDomain;
-import com.sunac.entity.AllData;
-import com.sunac.entity.EsCommerceBondMain;
+import com.sunac.ow.owdomain.AllData;
+import com.sunac.ow.owdomain.EsCommerceBondMain;
+import com.sunac.utils.HikariUtil;
 import com.sunac.utils.JdbcUtils;
+import com.sunac.utils.MakeMd5Utils;
 import com.sunac.utils.StringToIntegerUtils;
-import com.sunac.utils.Util;
-import org.apache.commons.codec.digest.DigestUtils;
 import org.apache.flink.api.common.functions.RuntimeContext;
 import org.apache.flink.api.common.state.MapState;
 import org.apache.flink.api.common.state.MapStateDescriptor;
@@ -15,8 +14,12 @@ import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.functions.co.KeyedCoProcessFunction;
 import org.apache.flink.util.Collector;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import java.util.Iterator;
+import java.sql.Connection;
+import java.util.ArrayList;
+import java.util.HashMap;
 
 /**
  * @Description: TODO
@@ -27,29 +30,51 @@ import java.util.Iterator;
 public class EsCommerceBondMainCoProcessFunction extends KeyedCoProcessFunction<String, AllData, EsCommerceBondMain, AllData> {
 
     MapState<String, EsCommerceBondMain> mapState;
-    MapState<String, Void> keyMapState;
-
+    private static final Logger log = LoggerFactory.getLogger(EsCommerceBondMainCoProcessFunction.class);
+    transient Connection connection = null;
     @Override
     public void open(Configuration parameters) throws Exception {
         RuntimeContext runtimeContext = getRuntimeContext();
-        mapState = runtimeContext.getMapState(new MapStateDescriptor<String, EsCommerceBondMain>("map_stat", String.class, EsCommerceBondMain.class));
-        keyMapState = runtimeContext.getMapState(new MapStateDescriptor<String, Void>("map_stat_2", String.class, Void.class));
+        mapState = runtimeContext.getMapState(new MapStateDescriptor<>("map_stat", String.class, EsCommerceBondMain.class));
+        connection = HikariUtil.getInstance().getConnection();
+        log.info("=====================" + this.getClass() + ":创建HikariUtil成功！！！=======================");
     }
 
     @Override
     public void processElement1(AllData allData, KeyedCoProcessFunction<String, AllData, EsCommerceBondMain, AllData>.Context context, Collector<AllData> collector) throws Exception {
-        // TODO PASS事件 ：把主表主键维护
-        String operation_type = allData.getOperation_type();
-        String fld_guid = allData.getFld_guid();
-        if (null != fld_guid && !"".equals(fld_guid)) {
-            keyMapState.put(fld_guid, null);
+
+        String operationType = allData.getOperation_type();
+
+        //todo 判断是上个流当中的1方法还是2方法来的数据
+        //todo 这里只处理2方法来的数据
+        if (allData.getOperation_type().contains("EsCommerceBondFeeObject#")){
+            String operationType1 = allData.getOperation_type().split("#")[1];
+            ArrayList<String> arr = JdbcUtils.queryFldGuid(allData.getCbfo_fld_object_guid());
+            //todo 维护idx
+            for (int i = 0; i < arr.size(); i++) {
+                Tuple2<Connection, Boolean> tp = JdbcUtils.insertOrIgnore2(connection,"idx_owe_es_commerce_bond_main", arr.get(i), MakeMd5Utils.makeMd5(allData.getCbfo_fld_bond_guid() , allData.getFld_area_guid() , allData.getFld_owner_guid()));
+                connection = tp.f0;
+                log.info("=====================" + this.getClass() + ":插入fld_guid成功！！！=======================");
+            }
+            EsCommerceBondMain esCommerceBondMain = mapState.get(MakeMd5Utils.makeMd5(allData.getCbfo_fld_bond_guid() , allData.getFld_area_guid() , allData.getFld_owner_guid()));
+            if (null != esCommerceBondMain){
+                esCommerceBondMain.setOperation_type(operationType1);
+                esCommerceBondMain.setUpdateInfoMap(new HashMap<String, String>());
+                String sql = JdbcUtils.makeSQL(new Tuple2<>(Config.EsCommerceBondMain, esCommerceBondMain));
+                Tuple2<Connection, Boolean> tp2 = JdbcUtils.queryByTabAndKey2(context, connection,"idx_owe_es_commerce_bond_main", MakeMd5Utils.makeMd5(allData.getCbfo_fld_bond_guid() , allData.getFld_area_guid() , allData.getFld_owner_guid()), sql);
+                connection = tp2.f0;
+                String flag = (tp2.f1 ? "成功" : "失败");
+                log.info("=====================" + this.getClass() + ":processElement1:处理来自EsCommerceBondMain因为修改关联键的宽表" + flag + "=======================");
+            }
+            return;
         }
-        if (operation_type.equals(Config.PASS)) {
-            collector.collect(allData);
+        if (operationType.equals(Config.PASS)) {
+            return;
         }
-        if (operation_type.equals(Config.INSERT) || operation_type.equals(Config.UPDATE)) {
-            EsCommerceBondMain esCommerceBondMain = mapState.get(DigestUtils.md5Hex(allData.getCbfo_fld_bond_guid() + allData.getFld_area_guid() + allData.getFld_owner_guid()));
+        if (operationType.equals(Config.INSERT) || operationType.equals(Config.UPDATE)) {
+            EsCommerceBondMain esCommerceBondMain = mapState.get(MakeMd5Utils.makeMd5(allData.getCbfo_fld_bond_guid() , allData.getFld_area_guid() , allData.getFld_owner_guid()));
             if (null != esCommerceBondMain) {
+                allData.setCbm_fld_guid(esCommerceBondMain.getFld_guid());
                 allData.setCbm_fld_area_guid(esCommerceBondMain.getFld_area_guid());
                 allData.setCbm_fld_owner_guid(esCommerceBondMain.getFld_owner_guid());
                 allData.setBm_end_date(esCommerceBondMain.getFld_end_date());
@@ -57,45 +82,40 @@ public class EsCommerceBondMainCoProcessFunction extends KeyedCoProcessFunction<
             }
             collector.collect(allData);
         }
-
     }
 
     @Override
     public void processElement2(EsCommerceBondMain newData, KeyedCoProcessFunction<String, AllData, EsCommerceBondMain, AllData>.Context context, Collector<AllData> collector) throws Exception {
-        String operation_type = newData.getOperation_type();
+        String operationType = newData.getOperation_type();
 
-        if (operation_type.equals(Config.PASS) || (operation_type.equals(Config.UPDATE) && newData.getUpdateInfoMap().size() == 0)) {
+        if (operationType.equals(Config.PASS) || (operationType.equals(Config.UPDATE) && newData.getUpdateInfoMap().size() == 0)) {
             return;
         }
-        String pk = newData.getPk();
-        EsCommerceBondMain oldData = mapState.get(pk);
-
-        Iterator<String> iterator = keyMapState.keys().iterator();
-        boolean isHaveKey = iterator.hasNext();
         boolean isSend = false;
-        if(oldData != null){
-            if (StringToIntegerUtils.getInteger(oldData.getFld_end_date()) > StringToIntegerUtils.getInteger(newData.getFld_end_date())){
-                newData.setFld_end_date(oldData.getFld_end_date());
-            }
-            if (StringToIntegerUtils.getInteger(oldData.getFld_stop_date()) > StringToIntegerUtils.getInteger(newData.getFld_stop_date())){
-                newData.setFld_stop_date(oldData.getFld_stop_date());
-            }
-        }
-        if (operation_type.equals(Config.DELETE)) {
+        String pk = newData.getPk();
+
+        if (operationType.equals(Config.DELETE)) {
             mapState.remove(pk);
             isSend = true;
-        } else if (operation_type.equals(Config.INSERT) || operation_type.equals(Config.UPDATE)) {
+        } else if (operationType.equals(Config.INSERT) || operationType.equals(Config.UPDATE)) {
+            EsCommerceBondMain oldData = mapState.get(pk);
+            if(oldData != null){
+                if (StringToIntegerUtils.getInteger(oldData.getFld_end_date()) > StringToIntegerUtils.getInteger(newData.getFld_end_date())){
+                    newData.setFld_end_date(oldData.getFld_end_date());
+                }
+                if (StringToIntegerUtils.getInteger(oldData.getFld_stop_date()) > StringToIntegerUtils.getInteger(newData.getFld_stop_date())){
+                    newData.setFld_stop_date(oldData.getFld_stop_date());
+                }
+            }
             mapState.put(pk, newData);
             isSend = true;
         }
-        if (isSend && isHaveKey) {
-            String sql = JdbcUtils.makeSQL(new Tuple2<String, CommonDomain>(Config.EsCommerceBondMain, newData));
-            if (null != sql) {
-                while (iterator.hasNext()) {
-                    String fld_guid_op = iterator.next();
-                    Util.sendData2SlideStream(context, sql, fld_guid_op);
-                }
-            }
+        if (isSend) {
+            String sql = JdbcUtils.makeSQL(new Tuple2<>(Config.EsCommerceBondMain, newData));
+            Tuple2<Connection, Boolean> tp2 = JdbcUtils.queryByTabAndKey2(context, connection,"idx_owe_es_commerce_bond_main", pk, sql);
+            connection = tp2.f0;
+            String flag = (tp2.f1 ? "成功" : "失败");
+            log.info("=====================" + this.getClass() + ":更改宽表：=======================" + flag);
         }
     }
 }
